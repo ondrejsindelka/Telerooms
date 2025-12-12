@@ -80,36 +80,36 @@ export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen p-4 md:p-8 relative">
+      {/* Top Right Action Buttons */}
+      <div className="absolute top-4 right-4 flex gap-2 z-10">
+        <button
+          onClick={onLogout}
+          className="px-3 py-1.5 bg-gray-800/80 hover:bg-gray-700 backdrop-blur-sm border border-gray-700 rounded-lg text-xs font-medium text-gray-300 transition-all hover:text-white"
+        >
+          Změnit skupinu
+        </button>
+        <a
+          href="/admin"
+          className="px-3 py-1.5 bg-gray-800/80 hover:bg-primary/20 backdrop-blur-sm border border-gray-700 hover:border-primary/50 rounded-lg text-xs font-medium text-gray-300 transition-all hover:text-primary"
+        >
+          Admin
+        </a>
+      </div>
+
+      <div className="max-w-7xl mx-auto pt-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 md:gap-0 mb-8">
-          <div>
-            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent">
-              TeleRooms
-            </h1>
-            <div className="flex items-center gap-3">
-              <span className="text-gray-500 text-sm uppercase tracking-wider">Vaše skupina:</span>
-              <TeamBadge name={team.name} color={team.color} />
-            </div>
-          </div>
-          <div className="flex flex-col sm:flex-row justify-end gap-2 w-full md:w-auto">
-            <button
-              onClick={onLogout}
-              className="flex-1 sm:flex-none text-center px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-semibold transition-all"
-            >
-              Změnit skupinu
-            </button>
-            <a
-              href="/admin"
-              className="flex-1 sm:flex-none text-center px-3 py-2 bg-primary hover:bg-primary-dark rounded-lg text-xs font-semibold shadow-lg shadow-primary/30 transition-all text-white"
-            >
-              Admin
-            </a>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary via-blue-400 to-primary-dark bg-clip-text text-transparent inline-block">
+            TeleRooms
+          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-gray-500 text-sm uppercase tracking-wider font-medium">Skupina</span>
+            <TeamBadge name={team.name} color={team.color} />
           </div>
         </div>
 
-        {/* Live Counter */}
+        {/* Live Counter Dashboard */}
         <LiveCounter
           occupiedCount={stats.occupiedCount}
           reservedCount={stats.reservedCount}
