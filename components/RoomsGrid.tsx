@@ -80,32 +80,36 @@ export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-8 relative">
-      {/* Top Right Action Buttons */}
-      <div className="absolute top-4 right-4 flex gap-2 z-10">
-        <button
-          onClick={onLogout}
-          className="px-3 py-1.5 bg-gray-800/80 hover:bg-gray-700 backdrop-blur-sm border border-gray-700 rounded-lg text-xs font-medium text-gray-300 transition-all hover:text-white"
-        >
-          Změnit skupinu
-        </button>
-        <a
-          href="/admin"
-          className="px-3 py-1.5 bg-gray-800/80 hover:bg-primary/20 backdrop-blur-sm border border-gray-700 hover:border-primary/50 rounded-lg text-xs font-medium text-gray-300 transition-all hover:text-primary"
-        >
-          Admin
-        </a>
-      </div>
-
-      <div className="max-w-7xl mx-auto pt-8">
+    <div className="min-h-screen p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary via-blue-400 to-primary-dark bg-clip-text text-transparent inline-block">
-            TeleRooms
-          </h1>
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-gray-500 text-sm uppercase tracking-wider font-medium">Skupina</span>
-            <TeamBadge name={team.name} color={team.color} />
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 pb-4 border-b border-gray-800">
+          {/* Left: Title & Badge */}
+          <div className="flex items-center gap-4">
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-primary via-blue-400 to-primary-dark bg-clip-text text-transparent">
+              TeleRooms
+            </h1>
+            <div className="h-8 w-px bg-gray-700 hidden md:block"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 text-xs uppercase tracking-wider font-medium hidden sm:inline-block">Skupina</span>
+              <TeamBadge name={team.name} color={team.color} />
+            </div>
+          </div>
+
+          {/* Right: Actions */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onLogout}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs font-medium text-gray-300 transition-all hover:text-white"
+            >
+              Změnit skupinu
+            </button>
+            <a
+              href="/admin"
+              className="px-4 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/20 hover:border-primary/50 rounded-lg text-xs font-medium text-primary transition-all"
+            >
+              Admin
+            </a>
           </div>
         </div>
 
