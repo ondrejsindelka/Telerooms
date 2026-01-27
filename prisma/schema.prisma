@@ -15,8 +15,17 @@ model Team {
   createdAt  DateTime  @default(now())
   isArchived Boolean   @default(false)
 
-  rooms      Room[]
-  history    History[]
+  rooms        Room[]
+  history      History[]
+  chatMessages ChatMessage[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  message   String
+  createdAt DateTime @default(now())
 }
 
 model Room {
@@ -69,4 +78,12 @@ model DailyStats {
   mostPopularRoomId     String?
   averageOccupationMins Int?
   teamActivity          Json     // {teamId: count}
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  data        Json     // {teams: [], rooms: [], history: []}
 }

@@ -16,6 +16,11 @@ export const GET_ROOMS = gql`
       occupiedSince
       reservedUntil
       updatedAt
+      stats {
+        averageOccupationMinutes
+        totalVisits
+        lastOccupiedAt
+      }
     }
   }
 `
@@ -25,6 +30,8 @@ export const GET_CURRENT_STATS = gql`
     currentStats {
       occupiedCount
       reservedCount
+      freeCount
+      offlineCount
       totalRooms
       activeTeams
     }
@@ -70,6 +77,25 @@ export const CREATE_TEAM = gql`
       id
       name
       color
+    }
+  }
+`
+
+export const UPDATE_TEAM = gql`
+  mutation UpdateTeam($id: ID!, $name: String, $color: String) {
+    updateTeam(id: $id, name: $name, color: $color) {
+      id
+      name
+      color
+    }
+  }
+`
+
+export const DELETE_TEAM = gql`
+  mutation DeleteTeam($id: ID!) {
+    deleteTeam(id: $id) {
+      success
+      message
     }
   }
 `
@@ -139,6 +165,28 @@ export const ADMIN_ARCHIVE_AND_RESET = gql`
   }
 `
 
+export const ADMIN_RESTORE_TEAMS_FROM_ARCHIVE = gql`
+  mutation AdminRestoreTeamsFromArchive {
+    adminRestoreTeamsFromArchive {
+      success
+      restoredCount
+      message
+    }
+  }
+`
+
+export const ADMIN_CLEAR_ARCHIVE = gql`
+  mutation AdminClearArchive {
+    adminClearArchive {
+      success
+      deletedHistory
+      deletedStats
+      deletedTeams
+      message
+    }
+  }
+`
+
 export const CREATE_ROOM = gql`
   mutation CreateRoom($name: String!, $description: String!) {
     createRoom(name: $name, description: $description) {
@@ -182,6 +230,95 @@ export const ROOMS_UPDATED_SUBSCRIPTION = gql`
       occupiedSince
       reservedUntil
       updatedAt
+    }
+  }
+`
+
+export const GET_BACKUPS = gql`
+  query GetBackups {
+    backups {
+      id
+      name
+      description
+      createdAt
+      teamCount
+      roomCount
+      historyCount
+    }
+  }
+`
+
+export const CREATE_BACKUP = gql`
+  mutation CreateBackup($name: String!, $description: String) {
+    createBackup(name: $name, description: $description) {
+      id
+      name
+      description
+      createdAt
+      teamCount
+      roomCount
+      historyCount
+    }
+  }
+`
+
+export const RESTORE_BACKUP = gql`
+  mutation RestoreBackup($id: ID!) {
+    restoreBackup(id: $id) {
+      success
+      message
+    }
+  }
+`
+
+export const DELETE_BACKUP = gql`
+  mutation DeleteBackup($id: ID!) {
+    deleteBackup(id: $id) {
+      success
+      message
+    }
+  }
+`
+
+export const AUTO_RELEASE_EXPIRED_ROOM = gql`
+  mutation AutoReleaseExpiredRoom($roomId: ID!) {
+    autoReleaseExpiredRoom(roomId: $roomId) {
+      id
+      status
+      currentTeamId
+      reservedUntil
+    }
+  }
+`
+
+export const GET_CHAT_MESSAGES = gql`
+  query GetChatMessages($limit: Int) {
+    chatMessages(limit: $limit) {
+      id
+      teamId
+      team {
+        id
+        name
+        color
+      }
+      message
+      createdAt
+    }
+  }
+`
+
+export const SEND_CHAT_MESSAGE = gql`
+  mutation SendChatMessage($teamId: ID!, $message: String!) {
+    sendChatMessage(teamId: $teamId, message: $message) {
+      id
+      teamId
+      team {
+        id
+        name
+        color
+      }
+      message
+      createdAt
     }
   }
 `

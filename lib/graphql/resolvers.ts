@@ -2,12 +2,68 @@ import { prisma } from '../prisma'
 import { pubsub, ROOMS_UPDATED } from './pubsub'
 import { RoomStatus, ActionType } from '@prisma/client'
 
+const RESERVATION_DURATION_MS = 5 * 60 * 1000 // 5 minutes
+
+async function calculateRoomStats(roomId: string) {
+  // Get all OCCUPY actions for this room (non-archived)
+  const occupations = await prisma.history.findMany({
+    where: {
+      roomId,
+      action: ActionType.OCCUPY,
+      archivedDate: null
+    },
+    orderBy: { timestamp: 'desc' }
+  })
+
+  const MIN_DURATION_MS = 3 * 60 * 1000 // 3 minutes - only count visits >= 3 min
+
+  // Calculate average occupation time by matching OCCUPY with FREE
+  let totalDurationMs = 0
+  let validVisitsCount = 0 // Only count visits >= 3 minutes
+
+  for (const occupy of occupations) {
+    const freeAction = await prisma.history.findFirst({
+      where: {
+        roomId,
+        teamId: occupy.teamId,
+        action: ActionType.FREE,
+        timestamp: { gt: occupy.timestamp }
+      },
+      orderBy: { timestamp: 'asc' }
+    })
+
+    if (freeAction) {
+      const duration = freeAction.timestamp.getTime() - occupy.timestamp.getTime()
+
+      // Only count visits that lasted >= 3 minutes
+      if (duration >= MIN_DURATION_MS) {
+        totalDurationMs += duration
+        validVisitsCount++
+      }
+    }
+  }
+
+  const averageOccupationMinutes = validVisitsCount > 0
+    ? Math.round(totalDurationMs / validVisitsCount / 1000 / 60)
+    : null
+
+  return {
+    roomId,
+    averageOccupationMinutes,
+    totalVisits: validVisitsCount,
+    lastOccupiedAt: occupations[0]?.timestamp?.toISOString() || null
+  }
+}
+
 export const resolvers = {
   // Custom type resolvers to ensure proper date serialization
   Room: {
     occupiedSince: (parent: any) => parent.occupiedSince?.toISOString() || null,
     reservedUntil: (parent: any) => parent.reservedUntil?.toISOString() || null,
     updatedAt: (parent: any) => parent.updatedAt?.toISOString() || null,
+    stats: async (parent: any) => {
+      return calculateRoomStats(parent.id)
+    },
   },
   Team: {
     createdAt: (parent: any) => parent.createdAt?.toISOString() || null,
@@ -19,6 +75,9 @@ export const resolvers = {
   DailyStats: {
     date: (parent: any) => parent.date?.toISOString() || null,
     teamActivity: (parent: any) => JSON.stringify(parent.teamActivity)
+  },
+  ChatMessage: {
+    createdAt: (parent: any) => parent.createdAt?.toISOString() || null,
   },
 
   Query: {
@@ -65,9 +124,38 @@ export const resolvers = {
       return {
         occupiedCount: rooms.filter(r => r.status === 'OCCUPIED').length,
         reservedCount: rooms.filter(r => r.status === 'RESERVED').length,
+        freeCount: rooms.filter(r => r.status === 'FREE').length,
+        offlineCount: rooms.filter(r => r.status === 'OFFLINE').length,
         totalRooms: rooms.length,
         activeTeams: teams.length
       }
+    },
+
+    backups: async () => {
+      const backups = await prisma.backup.findMany({
+        orderBy: { createdAt: 'desc' }
+      })
+
+      return backups.map(backup => {
+        const data = backup.data as any
+        return {
+          id: backup.id,
+          name: backup.name,
+          description: backup.description,
+          createdAt: backup.createdAt.toISOString(),
+          teamCount: data.teams?.length || 0,
+          roomCount: data.rooms?.length || 0,
+          historyCount: data.history?.length || 0
+        }
+      })
+    },
+
+    chatMessages: async (_: any, { limit }: { limit?: number }) => {
+      return await prisma.chatMessage.findMany({
+        include: { team: true },
+        orderBy: { createdAt: 'desc' },
+        take: limit || 50
+      })
     }
   },
 
@@ -87,6 +175,85 @@ export const resolvers = {
       return await prisma.team.create({
         data: { name, color }
       })
+    },
+
+    updateTeam: async (_: any, { id, name, color }: any) => {
+      // Check if team exists
+      const existing = await prisma.team.findUnique({ where: { id } })
+      if (!existing) {
+        throw new Error('Skupina nebyla nalezena')
+      }
+
+      // If changing name, check for duplicates
+      if (name && name !== existing.name) {
+        const duplicate = await prisma.team.findUnique({ where: { name } })
+        if (duplicate) {
+          throw new Error('Skupina s tímto názvem již existuje')
+        }
+      }
+
+      // Validate hex color if provided
+      if (color && !/^#[0-9A-F]{6}$/i.test(color)) {
+        throw new Error('Neplatný formát barvy (použijte #RRGGBB)')
+      }
+
+      return await prisma.team.update({
+        where: { id },
+        data: {
+          ...(name && { name }),
+          ...(color && { color })
+        }
+      })
+    },
+
+    deleteTeam: async (_: any, { id }: any) => {
+      // Check if team exists
+      const existing = await prisma.team.findUnique({ where: { id } })
+      if (!existing) {
+        return {
+          success: false,
+          message: 'Skupina nebyla nalezena'
+        }
+      }
+
+      // Check if team has active rooms
+      const activeRooms = await prisma.room.findMany({
+        where: { currentTeamId: id }
+      })
+
+      if (activeRooms.length > 0) {
+        // Free all rooms first
+        await prisma.room.updateMany({
+          where: { currentTeamId: id },
+          data: {
+            status: RoomStatus.FREE,
+            currentTeamId: null,
+            occupiedSince: null,
+            reservedUntil: null
+          }
+        })
+      }
+
+      // Delete all history for this team
+      await prisma.history.deleteMany({
+        where: { teamId: id }
+      })
+
+      // Delete the team
+      await prisma.team.delete({
+        where: { id }
+      })
+
+      // Publish room updates if rooms were freed
+      if (activeRooms.length > 0) {
+        const allRooms = await prisma.room.findMany({ include: { currentTeam: true } })
+        pubsub.publish(ROOMS_UPDATED, { roomsUpdated: allRooms })
+      }
+
+      return {
+        success: true,
+        message: `Skupina "${existing.name}" byla úspěšně smazána`
+      }
     },
 
     occupyRoom: async (_: any, { roomId, teamId }: any) => {
@@ -168,7 +335,7 @@ export const resolvers = {
       }
 
       // Reserve for 5 minutes
-      const reservedUntil = new Date(Date.now() + 5 * 60 * 1000)
+      const reservedUntil = new Date(Date.now() + RESERVATION_DURATION_MS)
 
       const updatedRoom = await prisma.room.update({
         where: { id: roomId },
@@ -300,9 +467,12 @@ export const resolvers = {
         if (status === RoomStatus.OCCUPIED) {
           updateData.occupiedSince = new Date()
         } else if (status === RoomStatus.RESERVED) {
-          updateData.reservedUntil = new Date(Date.now() + 5 * 60 * 1000)
+          updateData.reservedUntil = new Date(Date.now() + RESERVATION_DURATION_MS)
         }
       }
+
+      // If room was occupied/reserved and we're freeing it, create FREE record for the original team
+      const originalTeamId = room.currentTeamId
 
       const updatedRoom = await prisma.room.update({
         where: { id: roomId },
@@ -310,7 +480,30 @@ export const resolvers = {
         include: { currentTeam: true }
       })
 
-      if (teamId) {
+      // Create history record
+      if (status === RoomStatus.FREE && originalTeamId && (previousStatus === RoomStatus.OCCUPIED || previousStatus === RoomStatus.RESERVED)) {
+        // Admin freed an occupied/reserved room - create FREE record to close the visit
+        await prisma.history.create({
+          data: {
+            roomId,
+            teamId: originalTeamId,
+            action: ActionType.FREE,
+            previousStatus,
+            newStatus: status
+          }
+        })
+      } else if (status === RoomStatus.OFFLINE && originalTeamId && (previousStatus === RoomStatus.OCCUPIED || previousStatus === RoomStatus.RESERVED)) {
+        // Admin set to offline - also close the visit
+        await prisma.history.create({
+          data: {
+            roomId,
+            teamId: originalTeamId,
+            action: ActionType.FREE,
+            previousStatus,
+            newStatus: status
+          }
+        })
+      } else if (teamId) {
         await prisma.history.create({
           data: {
             roomId,
@@ -362,8 +555,15 @@ export const resolvers = {
       })
       const mostPopularRoomId = Object.entries(roomCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
 
-      await prisma.dailyStats.create({
-        data: {
+      await prisma.dailyStats.upsert({
+        where: { date: today },
+        update: {
+          totalOccupations: occupations,
+          totalReservations: reservations,
+          mostPopularRoomId,
+          teamActivity: teamActivity
+        },
+        create: {
           date: today,
           totalOccupations: occupations,
           totalReservations: reservations,
@@ -382,11 +582,15 @@ export const resolvers = {
         }
       })
 
-      // Optionally delete teams
+      // Optionally delete teams completely
+      let deletedTeamsCount = 0
       if (deleteTeams) {
-        // Must delete history first to avoid FK constraint violations
-        await prisma.history.deleteMany()
-        await prisma.team.deleteMany()
+        // Delete all history records first (to avoid FK constraint issues)
+        await prisma.history.deleteMany({})
+
+        // Delete all teams
+        const deleteResult = await prisma.team.deleteMany({})
+        deletedTeamsCount = deleteResult.count
       }
 
       const allRooms = await prisma.room.findMany({ include: { currentTeam: true } })
@@ -395,7 +599,44 @@ export const resolvers = {
       return {
         success: true,
         archivedHistoryCount: historyCount.count,
-        message: `Archivováno ${historyCount.count} záznamů. ${deleteTeams ? 'Skupiny smazány.' : 'Skupiny zachovány.'}`
+        message: `Archivováno ${historyCount.count} záznamů. ${deleteTeams ? `Smazáno ${deletedTeamsCount} skupin.` : 'Skupiny zachovány.'}`
+      }
+    },
+
+    adminRestoreTeamsFromArchive: async () => {
+      // Restore all archived teams
+      const result = await prisma.team.updateMany({
+        where: { isArchived: true },
+        data: { isArchived: false }
+      })
+
+      return {
+        success: true,
+        restoredCount: result.count,
+        message: `Obnoveno ${result.count} skupin z archivu`
+      }
+    },
+
+    adminClearArchive: async () => {
+      // Delete all archived history
+      const archivedHistory = await prisma.history.deleteMany({
+        where: { archivedDate: { not: null } }
+      })
+
+      // Delete all daily stats
+      const dailyStats = await prisma.dailyStats.deleteMany()
+
+      // Delete all archived teams
+      const archivedTeams = await prisma.team.deleteMany({
+        where: { isArchived: true }
+      })
+
+      return {
+        success: true,
+        deletedHistory: archivedHistory.count,
+        deletedStats: dailyStats.count,
+        deletedTeams: archivedTeams.count,
+        message: `Vymazáno: ${archivedHistory.count} záznamů historie, ${dailyStats.count} denních statistik, ${archivedTeams.count} archivovaných skupin`
       }
     },
 
@@ -431,6 +672,260 @@ export const resolvers = {
       } catch (e) {
         return false
       }
+    },
+
+    createBackup: async (_: any, { name, description }: any) => {
+      // Gather all data
+      const teams = await prisma.team.findMany()
+      const rooms = await prisma.room.findMany()
+      const history = await prisma.history.findMany({
+        where: { archivedDate: null }
+      })
+
+      const data = {
+        teams: teams.map(t => ({
+          id: t.id,
+          name: t.name,
+          color: t.color,
+          createdAt: t.createdAt.toISOString(),
+          isArchived: t.isArchived
+        })),
+        rooms: rooms.map(r => ({
+          id: r.id,
+          name: r.name,
+          description: r.description,
+          status: r.status,
+          currentTeamId: r.currentTeamId,
+          occupiedSince: r.occupiedSince?.toISOString() || null,
+          reservedUntil: r.reservedUntil?.toISOString() || null
+        })),
+        history: history.map(h => ({
+          id: h.id,
+          roomId: h.roomId,
+          teamId: h.teamId,
+          action: h.action,
+          timestamp: h.timestamp.toISOString(),
+          previousStatus: h.previousStatus,
+          newStatus: h.newStatus
+        }))
+      }
+
+      const backup = await prisma.backup.create({
+        data: {
+          name,
+          description,
+          data
+        }
+      })
+
+      return {
+        id: backup.id,
+        name: backup.name,
+        description: backup.description,
+        createdAt: backup.createdAt.toISOString(),
+        teamCount: data.teams.length,
+        roomCount: data.rooms.length,
+        historyCount: data.history.length
+      }
+    },
+
+    restoreBackup: async (_: any, { id }: any) => {
+      const backup = await prisma.backup.findUnique({ where: { id } })
+
+      if (!backup) {
+        return {
+          success: false,
+          message: 'Záloha nebyla nalezena'
+        }
+      }
+
+      const data = backup.data as any
+
+      try {
+        // Clear current data
+        await prisma.history.deleteMany({ where: { archivedDate: null } })
+
+        // Reset all rooms
+        await prisma.room.updateMany({
+          data: {
+            status: RoomStatus.FREE,
+            currentTeamId: null,
+            occupiedSince: null,
+            reservedUntil: null
+          }
+        })
+
+        // Delete teams that don't exist in backup
+        const backupTeamIds = data.teams.map((t: any) => t.id)
+        await prisma.team.deleteMany({
+          where: { id: { notIn: backupTeamIds } }
+        })
+
+        // Restore teams
+        for (const team of data.teams) {
+          await prisma.team.upsert({
+            where: { id: team.id },
+            create: {
+              id: team.id,
+              name: team.name,
+              color: team.color,
+              createdAt: new Date(team.createdAt),
+              isArchived: team.isArchived
+            },
+            update: {
+              name: team.name,
+              color: team.color,
+              isArchived: team.isArchived
+            }
+          })
+        }
+
+        // Restore rooms state
+        for (const room of data.rooms) {
+          const existingRoom = await prisma.room.findUnique({ where: { id: room.id } })
+          if (existingRoom) {
+            await prisma.room.update({
+              where: { id: room.id },
+              data: {
+                status: room.status,
+                currentTeamId: room.currentTeamId,
+                occupiedSince: room.occupiedSince ? new Date(room.occupiedSince) : null,
+                reservedUntil: room.reservedUntil ? new Date(room.reservedUntil) : null
+              }
+            })
+          }
+        }
+
+        // Restore history
+        for (const h of data.history) {
+          const roomExists = await prisma.room.findUnique({ where: { id: h.roomId } })
+          const teamExists = await prisma.team.findUnique({ where: { id: h.teamId } })
+
+          if (roomExists && teamExists) {
+            await prisma.history.create({
+              data: {
+                id: h.id,
+                roomId: h.roomId,
+                teamId: h.teamId,
+                action: h.action,
+                timestamp: new Date(h.timestamp),
+                previousStatus: h.previousStatus,
+                newStatus: h.newStatus
+              }
+            })
+          }
+        }
+
+        // Publish room updates
+        const allRooms = await prisma.room.findMany({ include: { currentTeam: true } })
+        pubsub.publish(ROOMS_UPDATED, { roomsUpdated: allRooms })
+
+        return {
+          success: true,
+          message: `Záloha "${backup.name}" byla úspěšně obnovena`
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          message: `Chyba při obnově: ${error.message}`
+        }
+      }
+    },
+
+    deleteBackup: async (_: any, { id }: any) => {
+      const backup = await prisma.backup.findUnique({ where: { id } })
+
+      if (!backup) {
+        return {
+          success: false,
+          message: 'Záloha nebyla nalezena'
+        }
+      }
+
+      await prisma.backup.delete({ where: { id } })
+
+      return {
+        success: true,
+        message: `Záloha "${backup.name}" byla úspěšně smazána`
+      }
+    },
+
+    autoReleaseExpiredRoom: async (_: any, { roomId }: any) => {
+      const room = await prisma.room.findUnique({ where: { id: roomId } })
+
+      if (!room) {
+        return null
+      }
+
+      // Only release if room is RESERVED and reservation has expired
+      if (room.status !== RoomStatus.RESERVED || !room.reservedUntil) {
+        return null
+      }
+
+      const now = new Date()
+      if (room.reservedUntil > now) {
+        // Reservation hasn't expired yet
+        return null
+      }
+
+      const teamId = room.currentTeamId
+
+      // Release the room
+      const updatedRoom = await prisma.room.update({
+        where: { id: roomId },
+        data: {
+          status: RoomStatus.FREE,
+          currentTeamId: null,
+          reservedUntil: null
+        },
+        include: { currentTeam: true }
+      })
+
+      // Create history record
+      if (teamId) {
+        await prisma.history.create({
+          data: {
+            roomId,
+            teamId,
+            action: ActionType.CANCEL_RESERVATION,
+            previousStatus: RoomStatus.RESERVED,
+            newStatus: RoomStatus.FREE
+          }
+        })
+      }
+
+      // Publish update
+      const allRooms = await prisma.room.findMany({ include: { currentTeam: true } })
+      pubsub.publish(ROOMS_UPDATED, { roomsUpdated: allRooms })
+
+      return updatedRoom
+    },
+
+    sendChatMessage: async (_: any, { teamId, message }: { teamId: string, message: string }) => {
+      // Validate message length
+      if (message.length > 500) {
+        throw new Error('Zpráva je příliš dlouhá (max 500 znaků)')
+      }
+
+      if (message.trim().length === 0) {
+        throw new Error('Zpráva nemůže být prázdná')
+      }
+
+      // Check if team exists
+      const team = await prisma.team.findUnique({ where: { id: teamId } })
+      if (!team) {
+        throw new Error('Skupina nebyla nalezena')
+      }
+
+      const chatMessage = await prisma.chatMessage.create({
+        data: {
+          teamId,
+          message: message.trim()
+        },
+        include: { team: true }
+      })
+
+      return chatMessage
     }
   },
 

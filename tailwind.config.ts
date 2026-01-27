@@ -9,14 +9,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: '#0f172a', // Slate 900 - modern dark blue-gray
-        card: '#1e293b', // Slate 800 - lighter card background
-        primary: '#38bdf8', // Sky 400 - light blue accent
-        'primary-dark': '#0ea5e9', // Sky 500 - darker blue
-        'status-free': '#22c55e', // Green 500 - modern green
-        'status-occupied': '#ef4444', // Red 500 - vibrant red
-        'status-reserved': '#f59e0b', // Amber 500 - warm amber
-        'status-offline': '#64748b', // Slate 500 - modern gray
+        background: '#021a1a', // Deep teal-dark background
+        card: 'rgba(13, 46, 46, 0.6)', // Transparent teal for glassmorphism
+        primary: '#14b8a6', // Teal 500
+        'primary-light': '#2dd4bf', // Teal 400
+        'primary-dark': '#0d9488', // Teal 600
+        'status-free': '#10b981', // Emerald 500
+        'status-occupied': '#ef4444', // Red 500 - kept
+        'status-reserved': '#f59e0b', // Amber 500 - kept
+        'status-offline': '#475569', // Slate 600
       },
     },
   },

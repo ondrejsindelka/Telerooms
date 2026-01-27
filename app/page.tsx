@@ -29,10 +29,10 @@ export default function Home() {
       }
     }
 
-    // Start auto-release job (poll API)
+    // Start auto-release job (poll API) - 10s fallback for when client-triggered release fails
     const interval = setInterval(() => {
       fetch('/api/cron').catch(console.error)
-    }, 60 * 1000)
+    }, 10 * 1000)
 
     return () => clearInterval(interval)
   }, [])

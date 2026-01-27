@@ -34,20 +34,22 @@ export default function HistoryTable() {
   }
 
   return (
-    <div className="bg-card rounded-lg shadow-lg mb-6 border border-gray-700">
+    <div className="bg-white/5 backdrop-blur-md rounded-xl shadow-lg shadow-teal-500/5 mb-6 border border-teal-500/20">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full p-4 flex justify-between items-center hover:bg-primary/10 transition-colors rounded-lg"
+        className="w-full p-4 flex justify-between items-center hover:bg-white/5 transition-colors rounded-xl"
       >
         <div>
-          <h2 className="text-xl font-bold text-primary">Historie změn</h2>
+          <h2 className="text-xl font-bold text-teal-400">Historie změn</h2>
           <p className="text-sm text-gray-400">Záznamy o všech akcích</p>
         </div>
-        <span className="text-2xl text-primary">{expanded ? '▲' : '▼'}</span>
+        <svg className="w-5 h-5 text-teal-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {expanded && (
-        <div className="p-4 border-t border-gray-700">
+        <div className="p-4 border-t border-teal-500/20">
           {loading ? (
             <p className="text-center text-gray-400 py-8">Načítání...</p>
           ) : history.length === 0 ? (

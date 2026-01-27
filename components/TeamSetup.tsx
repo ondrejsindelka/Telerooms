@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQuery } from '@apollo/client'
+import { toast } from 'sonner'
 import { CREATE_TEAM, GET_TEAMS } from '@/lib/graphql/queries'
 import TeamBadge from './TeamBadge'
 
@@ -23,7 +24,7 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
     e.preventDefault()
 
     if (!name.trim()) {
-      alert('Zadejte název skupiny')
+      toast.error('Zadejte název skupiny')
       return
     }
 
@@ -33,21 +34,22 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
       })
 
       if (data?.createTeam) {
+        toast.success('Skupina úspěšně vytvořena!')
         onTeamCreated(data.createTeam)
       }
     } catch (error: any) {
-      alert(error.message || 'Chyba při vytváření skupiny')
+      toast.error(error.message || 'Chyba při vytváření skupiny')
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-card">
-      <div className="bg-card p-10 rounded-2xl shadow-2xl max-w-4xl w-full border border-gray-700 flex flex-col md:flex-row gap-10">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="bg-white/5 backdrop-blur-md p-10 rounded-2xl shadow-2xl shadow-teal-500/10 max-w-4xl w-full border border-teal-500/20 flex flex-col md:flex-row gap-10">
         
         {/* Create Team Section */}
         <div className="flex-1">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-500 bg-clip-text text-transparent">
               TeleRooms
             </h1>
             <p className="text-gray-400 text-lg">
@@ -64,7 +66,7 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-background border-2 border-gray-700 rounded-lg focus:outline-none focus:border-primary transition-colors text-white"
+                className="w-full px-4 py-3 bg-white/5 border-2 border-teal-500/20 rounded-xl focus:outline-none focus:border-teal-400 transition-colors text-white backdrop-blur-sm"
                 placeholder="Např. Skupina A"
                 maxLength={50}
               />
@@ -79,13 +81,13 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-24 h-14 rounded-lg cursor-pointer border-2 border-gray-700 hover:border-primary transition-colors"
+                  className="w-24 h-14 rounded-xl cursor-pointer border-2 border-teal-500/20 hover:border-teal-400 transition-colors"
                 />
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-background border-2 border-gray-700 rounded-lg focus:outline-none focus:border-primary font-mono uppercase transition-colors text-white"
+                  className="flex-1 px-4 py-3 bg-white/5 border-2 border-teal-500/20 rounded-xl focus:outline-none focus:border-teal-400 font-mono uppercase transition-colors text-white backdrop-blur-sm"
                   pattern="^#[0-9A-Fa-f]{6}$"
                 />
               </div>
@@ -94,13 +96,13 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
             <button
               type="submit"
               disabled={creating}
-              className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 rounded-lg transition-all shadow-lg shadow-primary/30 hover:shadow-primary/50 text-lg"
+              className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-500 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 text-lg"
             >
               {creating ? 'Vytváření...' : 'Vytvořit skupinu'}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-gray-700">
+          <div className="mt-8 pt-6 border-t border-teal-500/20">
             <p className="text-xs text-gray-500 text-center leading-relaxed">
               Název skupiny musí být unikátní<br />
               Barva slouží k identifikaci vašich místností
@@ -110,7 +112,7 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
           <div className="mt-6 text-center">
             <a
               href="/admin"
-              className="text-sm text-primary hover:text-primary-dark transition-colors"
+              className="text-sm text-teal-400 hover:text-teal-300 transition-colors"
             >
               Přejít do Admin panelu
             </a>
@@ -118,7 +120,7 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
         </div>
 
         {/* Existing Teams Section */}
-        <div className="flex-1 border-t md:border-t-0 md:border-l border-gray-700 pt-8 md:pt-0 md:pl-10">
+        <div className="flex-1 border-t md:border-t-0 md:border-l border-teal-500/20 pt-8 md:pt-0 md:pl-10">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold mb-3 text-white">
               Existující skupiny
@@ -138,10 +140,10 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
                 <button
                   key={team.id}
                   onClick={() => onTeamCreated(team)}
-                  className="w-full flex items-center justify-between p-4 bg-background border border-gray-700 rounded-lg hover:border-primary hover:bg-primary/5 transition-all group"
+                  className="w-full flex items-center justify-between p-4 bg-white/5 border border-teal-500/20 rounded-xl hover:border-teal-400/40 hover:bg-white/10 transition-all group backdrop-blur-sm"
                 >
                   <TeamBadge name={team.name} color={team.color} />
-                  <span className="text-gray-500 text-sm group-hover:text-primary transition-colors">
+                  <span className="text-gray-500 text-sm group-hover:text-teal-400 transition-colors">
                     Přihlásit →
                   </span>
                 </button>

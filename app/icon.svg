@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <!-- Teal gradient for main elements -->
+    <linearGradient id="tealGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#2DD4BF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#14B8A6;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Background glassmorphism effect -->
+    <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0F766E;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#042F2E;stop-opacity:0.95" />
+    </linearGradient>
+
+    <!-- Highlight for glass effect -->
+    <linearGradient id="highlightGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#5EEAD4;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#5EEAD4;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Glassmorphism circle background -->
+  <circle cx="50" cy="50" r="45" fill="url(#glassGradient)" stroke="#14B8A6" stroke-width="2"/>
+  <circle cx="50" cy="50" r="45" fill="url(#highlightGradient)" opacity="0.5"/>
+
+  <!-- Building/room icon -->
+  <!-- Main building shape -->
+  <rect x="25" y="35" width="50" height="35" rx="3" fill="url(#tealGradient)"/>
+
+  <!-- Roof -->
+  <polygon points="20,35 50,18 80,35" fill="url(#tealGradient)"/>
+
+  <!-- Door -->
+  <rect x="43" y="50" width="14" height="20" rx="2" fill="#042F2E"/>
+  <circle cx="54" cy="61" r="1.5" fill="#5EEAD4"/>
+
+  <!-- Windows -->
+  <rect x="30" y="42" width="8" height="8" rx="1" fill="#042F2E"/>
+  <rect x="62" y="42" width="8" height="8" rx="1" fill="#042F2E"/>
+
+  <!-- Window glow effect -->
+  <rect x="31" y="43" width="6" height="6" rx="0.5" fill="#5EEAD4" opacity="0.4"/>
+  <rect x="63" y="43" width="6" height="6" rx="0.5" fill="#5EEAD4" opacity="0.4"/>
+</svg>
