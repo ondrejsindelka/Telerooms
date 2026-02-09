@@ -1,8 +1,37 @@
 import { prisma } from '../prisma'
 import { pubsub, ROOMS_UPDATED } from './pubsub'
 import { RoomStatus, ActionType } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const RESERVATION_DURATION_MS = 5 * 60 * 1000 // 5 minutes
+
+// Ensure default admin exists
+async function ensureDefaultAdmin() {
+  const adminCount = await prisma.admin.count()
+  if (adminCount === 0) {
+    const hashedPassword = await bcrypt.hash('admin', 10)
+    await prisma.admin.create({
+      data: {
+        username: 'admin',
+        password: hashedPassword
+      }
+    })
+  }
+}
+
+// Initialize default admin on module load
+ensureDefaultAdmin().catch(console.error)
+
+// Get or create AppConfig
+async function getAppConfig() {
+  let config = await prisma.appConfig.findUnique({ where: { id: 'main' } })
+  if (!config) {
+    config = await prisma.appConfig.create({
+      data: { id: 'main', sessionVersion: 1 }
+    })
+  }
+  return config
+}
 
 async function calculateRoomStats(roomId: string) {
   // Get all OCCUPY actions for this room (non-archived)
@@ -78,6 +107,13 @@ export const resolvers = {
   },
   ChatMessage: {
     createdAt: (parent: any) => parent.createdAt?.toISOString() || null,
+  },
+  Admin: {
+    createdAt: (parent: any) => {
+      if (!parent.createdAt) return null
+      if (typeof parent.createdAt === 'string') return parent.createdAt
+      return parent.createdAt.toISOString()
+    },
   },
 
   Query: {
@@ -156,6 +192,63 @@ export const resolvers = {
         orderBy: { createdAt: 'desc' },
         take: limit || 50
       })
+    },
+
+    admins: async () => {
+      return await prisma.admin.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, username: true, createdAt: true }
+      })
+    },
+
+    validateSession: async (_: any, { token }: { token: string }) => {
+      // Token format: "adminId:username"
+      const [adminId] = token.split(':')
+      if (!adminId) return null
+
+      const admin = await prisma.admin.findUnique({
+        where: { id: adminId },
+        select: { id: true, username: true, createdAt: true }
+      })
+
+      return admin
+    },
+
+    sessionVersion: async () => {
+      const config = await getAppConfig()
+      return config.sessionVersion
+    },
+
+    validateTeamSession: async (_: any, { teamId, sessionVersion }: { teamId: string, sessionVersion: number }) => {
+      const config = await getAppConfig()
+
+      // Check if session version matches
+      if (sessionVersion !== config.sessionVersion) {
+        return {
+          valid: false,
+          team: null,
+          sessionVersion: config.sessionVersion
+        }
+      }
+
+      // Check if team exists
+      const team = await prisma.team.findUnique({
+        where: { id: teamId }
+      })
+
+      if (!team || team.isArchived) {
+        return {
+          valid: false,
+          team: null,
+          sessionVersion: config.sessionVersion
+        }
+      }
+
+      return {
+        valid: true,
+        team,
+        sessionVersion: config.sessionVersion
+      }
     }
   },
 
@@ -926,6 +1019,106 @@ export const resolvers = {
       })
 
       return chatMessage
+    },
+
+    adminLogin: async (_: any, { username, password }: { username: string, password: string }) => {
+      const admin = await prisma.admin.findUnique({ where: { username } })
+
+      if (!admin) {
+        return {
+          success: false,
+          message: 'Nesprávné uživatelské jméno nebo heslo',
+          admin: null,
+          token: null
+        }
+      }
+
+      const isValid = await bcrypt.compare(password, admin.password)
+      if (!isValid) {
+        return {
+          success: false,
+          message: 'Nesprávné uživatelské jméno nebo heslo',
+          admin: null,
+          token: null
+        }
+      }
+
+      // Simple token: adminId:username
+      const token = `${admin.id}:${admin.username}`
+
+      return {
+        success: true,
+        message: 'Přihlášení úspěšné',
+        admin: {
+          id: admin.id,
+          username: admin.username,
+          createdAt: admin.createdAt.toISOString()
+        },
+        token
+      }
+    },
+
+    createAdmin: async (_: any, { username, password }: { username: string, password: string }) => {
+      // Check if username already exists
+      const existing = await prisma.admin.findUnique({ where: { username } })
+      if (existing) {
+        throw new Error('Admin s tímto uživatelským jménem již existuje')
+      }
+
+      // Validate password length
+      if (password.length < 4) {
+        throw new Error('Heslo musí mít alespoň 4 znaky')
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10)
+
+      const admin = await prisma.admin.create({
+        data: {
+          username,
+          password: hashedPassword
+        }
+      })
+
+      return {
+        id: admin.id,
+        username: admin.username,
+        createdAt: admin.createdAt.toISOString()
+      }
+    },
+
+    deleteAdmin: async (_: any, { id }: { id: string }) => {
+      // Check if this is the last admin
+      const adminCount = await prisma.admin.count()
+      if (adminCount <= 1) {
+        return {
+          success: false,
+          message: 'Nelze smazat posledního admina'
+        }
+      }
+
+      const admin = await prisma.admin.findUnique({ where: { id } })
+      if (!admin) {
+        return {
+          success: false,
+          message: 'Admin nebyl nalezen'
+        }
+      }
+
+      await prisma.admin.delete({ where: { id } })
+
+      return {
+        success: true,
+        message: `Admin "${admin.username}" byl úspěšně smazán`
+      }
+    },
+
+    invalidateAllSessions: async () => {
+      const config = await getAppConfig()
+      const updated = await prisma.appConfig.update({
+        where: { id: 'main' },
+        data: { sessionVersion: config.sessionVersion + 1 }
+      })
+      return { sessionVersion: updated.sessionVersion }
     }
   },
 

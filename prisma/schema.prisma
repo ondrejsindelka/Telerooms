@@ -87,3 +87,15 @@ model Backup {
   createdAt   DateTime @default(now())
   data        Json     // {teams: [], rooms: [], history: []}
 }
+
+model Admin {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String   // bcrypt hash
+  createdAt DateTime @default(now())
+}
+
+model AppConfig {
+  id             String @id @default("main")
+  sessionVersion Int    @default(1)
+}

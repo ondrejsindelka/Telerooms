@@ -5,7 +5,6 @@ import { useQuery, useMutation } from '@apollo/client'
 import { toast } from 'sonner'
 import {
   GET_ROOMS,
-  GET_TEAMS,
   OCCUPY_ROOM,
   RESERVE_ROOM,
   FREE_ROOM,
@@ -28,13 +27,9 @@ interface RoomsGridProps {
 
 export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
   const [rooms, setRooms] = useState<any[]>([])
-  const [enableTeamCheck, setEnableTeamCheck] = useState(false)
 
   const { data: roomsData, refetch } = useQuery(GET_ROOMS, {
-    pollInterval: 3000 // Poll every 3 seconds for updates
-  })
-  const { data: teamsData } = useQuery(GET_TEAMS, {
-    pollInterval: 5000
+    pollInterval: 3000
   })
 
   const [occupyRoom] = useMutation(OCCUPY_ROOM)
@@ -48,30 +43,6 @@ export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
       setRooms(sortRooms(roomsData.rooms, team.id))
     }
   }, [roomsData, team.id])
-
-  // Enable team existence check after initial data load (delay to allow data sync)
-  useEffect(() => {
-    if (teamsData?.teams) {
-      // Wait 10 seconds after initial load before enabling the check
-      const timer = setTimeout(() => {
-        setEnableTeamCheck(true)
-      }, 10000)
-      return () => clearTimeout(timer)
-    }
-  }, [teamsData])
-
-  // Check if the current team still exists (only after initial delay)
-  useEffect(() => {
-    if (teamsData?.teams && enableTeamCheck) {
-      const teamExists = teamsData.teams.some((t: any) => t.id === team.id)
-      if (!teamExists) {
-        toast.error('Tvoje skupina už neexistuje. Vyber si novou skupinu.')
-        setTimeout(() => {
-          onLogout()
-        }, 2000)
-      }
-    }
-  }, [teamsData, team.id, onLogout, enableTeamCheck])
 
   const handleOccupy = async (roomId: string) => {
     await occupyRoom({
@@ -108,7 +79,6 @@ export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
       })
       refetch()
     } catch (error) {
-      // Silently ignore errors - server fallback will handle it
       console.error('Auto-release failed:', error)
     }
   }
@@ -116,59 +86,52 @@ export default function RoomsGrid({ team, onLogout }: RoomsGridProps) {
   return (
     <div className="min-h-screen p-3 sm:p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header - Simplified for Mobile */}
-        <div className="mb-4 sm:mb-6">
-          {/* Title and Team Badge - Single Row on Mobile */}
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-500 bg-clip-text text-transparent">
-                TeleRooms
-              </h1>
-              <TeamBadge name={team.name} color={team.color} />
-            </div>
-
-            {/* Dashboard Link - Icon Only on Small Screens */}
-            <a
-              href="/admin"
-              className="px-3 py-2 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/20 hover:border-teal-400/50 rounded-xl text-xs font-bold text-teal-400 transition-all shadow-lg shadow-teal-500/20"
-              title="Admin Dashboard"
-            >
-              <span className="hidden sm:inline">Dashboard</span>
-              <span className="sm:hidden">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </span>
-            </a>
+        {/* Header */}
+        <div className="mb-4 sm:mb-6 animate-fade-in">
+          {/* Title and Team Badge */}
+          <div className="flex items-center gap-2 sm:gap-3 mb-3">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold gradient-text">
+              TeleRooms
+            </h1>
+            <TeamBadge name={team.name} color={team.color} />
           </div>
 
-          {/* Change Team Button - Full Width on Mobile */}
+          {/* Change Team Button */}
           <button
             onClick={onLogout}
-            className="w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-white/5 hover:bg-white/10 border border-teal-500/20 hover:border-teal-400/40 rounded-xl text-xs sm:text-sm font-medium text-gray-300 transition-all hover:text-white backdrop-blur-sm"
+            className="btn-ghost w-full sm:w-auto border border-orange-500/20 hover:border-orange-400/40"
           >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+            </svg>
             Změnit skupinu
           </button>
         </div>
 
         {/* Rooms Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {rooms.map((room) => (
-            <RoomCard
+          {rooms.map((room, index) => (
+            <div
               key={room.id}
-              room={room}
-              currentTeamId={team.id}
-              onOccupy={handleOccupy}
-              onReserve={handleReserve}
-              onFree={handleFree}
-              onCancelReservation={handleCancelReservation}
-              onAutoRelease={handleAutoRelease}
-            />
+              style={{ animationDelay: `${index * 50}ms` }}
+              className="animate-slide-up"
+            >
+              <RoomCard
+                room={room}
+                currentTeamId={team.id}
+                onOccupy={handleOccupy}
+                onReserve={handleReserve}
+                onFree={handleFree}
+                onCancelReservation={handleCancelReservation}
+                onAutoRelease={handleAutoRelease}
+              />
+            </div>
           ))}
         </div>
 
         {rooms.length === 0 && (
-          <div className="text-center text-gray-400 mt-12">
+          <div className="text-center text-text-muted mt-12 animate-fade-in">
+            <div className="inline-block w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-4" />
             <p>Načítání místností...</p>
           </div>
         )}

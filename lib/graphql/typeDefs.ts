@@ -113,6 +113,29 @@ export const typeDefs = `#graphql
     message: String!
   }
 
+  type Admin {
+    id: ID!
+    username: String!
+    createdAt: String!
+  }
+
+  type LoginResult {
+    success: Boolean!
+    message: String!
+    admin: Admin
+    token: String
+  }
+
+  type AppConfig {
+    sessionVersion: Int!
+  }
+
+  type TeamValidation {
+    valid: Boolean!
+    team: Team
+    sessionVersion: Int!
+  }
+
   input HistoryFilter {
     teamId: String
     roomId: String
@@ -127,6 +150,10 @@ export const typeDefs = `#graphql
     currentStats: Stats!
     backups: [Backup!]!
     chatMessages(limit: Int): [ChatMessage!]!
+    admins: [Admin!]!
+    validateSession(token: String!): Admin
+    sessionVersion: Int!
+    validateTeamSession(teamId: ID!, sessionVersion: Int!): TeamValidation!
   }
 
   type AdminResult {
@@ -154,6 +181,10 @@ export const typeDefs = `#graphql
     deleteBackup(id: ID!): AdminResult!
     autoReleaseExpiredRoom(roomId: ID!): Room
     sendChatMessage(teamId: ID!, message: String!): ChatMessage!
+    adminLogin(username: String!, password: String!): LoginResult!
+    createAdmin(username: String!, password: String!): Admin!
+    deleteAdmin(id: ID!): AdminResult!
+    invalidateAllSessions: AppConfig!
   }
 
   type Subscription {

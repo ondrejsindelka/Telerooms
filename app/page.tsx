@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ApolloProvider } from '@apollo/client'
+import { ApolloProvider, useLazyQuery, useQuery } from '@apollo/client'
 import { client } from '@/lib/apollo-client'
 import TeamSetup from '@/components/TeamSetup'
 import RoomsGrid from '@/components/RoomsGrid'
+import { VALIDATE_TEAM_SESSION, GET_SESSION_VERSION } from '@/lib/graphql/queries'
 
 interface Team {
   id: string
@@ -12,24 +13,67 @@ interface Team {
   color: string
 }
 
-export default function Home() {
+interface StoredSession {
+  teamId: string
+  sessionVersion: number
+}
+
+function HomeContent() {
   const [team, setTeam] = useState<Team | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const [validating, setValidating] = useState(true)
+
+  const [validateTeamSession] = useLazyQuery(VALIDATE_TEAM_SESSION)
+  const { data: versionData } = useQuery(GET_SESSION_VERSION)
 
   useEffect(() => {
-    setMounted(true)
+    const validateSession = async () => {
+      const savedSession = localStorage.getItem('teamSession')
 
-    // Load team from localStorage
-    const savedTeam = localStorage.getItem('team')
-    if (savedTeam) {
-      try {
-        setTeam(JSON.parse(savedTeam))
-      } catch (e) {
-        console.error('Error parsing saved team:', e)
+      if (!savedSession) {
+        setValidating(false)
+        return
       }
+
+      try {
+        const session: StoredSession = JSON.parse(savedSession)
+
+        const { data } = await validateTeamSession({
+          variables: {
+            teamId: session.teamId,
+            sessionVersion: session.sessionVersion
+          }
+        })
+
+        if (data?.validateTeamSession?.valid && data.validateTeamSession.team) {
+          // Session is valid, set team
+          setTeam(data.validateTeamSession.team)
+
+          // Update session version if changed
+          if (data.validateTeamSession.sessionVersion !== session.sessionVersion) {
+            localStorage.setItem('teamSession', JSON.stringify({
+              teamId: session.teamId,
+              sessionVersion: data.validateTeamSession.sessionVersion
+            }))
+          }
+        } else {
+          // Session invalid - clear storage
+          localStorage.removeItem('teamSession')
+          localStorage.removeItem('team') // Clean up old format too
+        }
+      } catch (e) {
+        console.error('Error validating session:', e)
+        localStorage.removeItem('teamSession')
+        localStorage.removeItem('team')
+      }
+
+      setValidating(false)
     }
 
-    // Start auto-release job (poll API) - 10s fallback for when client-triggered release fails
+    validateSession()
+  }, [validateTeamSession])
+
+  // Start auto-release job
+  useEffect(() => {
     const interval = setInterval(() => {
       fetch('/api/cron').catch(console.error)
     }, 10 * 1000)
@@ -38,26 +82,48 @@ export default function Home() {
   }, [])
 
   const handleTeamCreated = (newTeam: Team) => {
+    const currentVersion = versionData?.sessionVersion || 1
+
+    // Store only teamId and sessionVersion
+    localStorage.setItem('teamSession', JSON.stringify({
+      teamId: newTeam.id,
+      sessionVersion: currentVersion
+    }))
+
+    // Clean up old format
+    localStorage.removeItem('team')
+
     setTeam(newTeam)
-    localStorage.setItem('team', JSON.stringify(newTeam))
   }
 
   const handleLogout = () => {
     setTeam(null)
+    localStorage.removeItem('teamSession')
     localStorage.removeItem('team')
   }
 
-  if (!mounted) {
-    return null // Avoid hydration mismatch
+  if (validating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-4" />
+          <p className="text-text-muted">Ověřování session...</p>
+        </div>
+      </div>
+    )
   }
 
+  return !team ? (
+    <TeamSetup onTeamCreated={handleTeamCreated} />
+  ) : (
+    <RoomsGrid team={team} onLogout={handleLogout} />
+  )
+}
+
+export default function Home() {
   return (
     <ApolloProvider client={client}>
-      {!team ? (
-        <TeamSetup onTeamCreated={handleTeamCreated} />
-      ) : (
-        <RoomsGrid team={team} onLogout={handleLogout} />
-      )}
+      <HomeContent />
     </ApolloProvider>
   )
 }

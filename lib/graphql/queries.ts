@@ -322,3 +322,85 @@ export const SEND_CHAT_MESSAGE = gql`
     }
   }
 `
+
+export const ADMIN_LOGIN = gql`
+  mutation AdminLogin($username: String!, $password: String!) {
+    adminLogin(username: $username, password: $password) {
+      success
+      message
+      admin {
+        id
+        username
+        createdAt
+      }
+      token
+    }
+  }
+`
+
+export const GET_ADMINS = gql`
+  query GetAdmins {
+    admins {
+      id
+      username
+      createdAt
+    }
+  }
+`
+
+export const VALIDATE_SESSION = gql`
+  query ValidateSession($token: String!) {
+    validateSession(token: $token) {
+      id
+      username
+      createdAt
+    }
+  }
+`
+
+export const CREATE_ADMIN = gql`
+  mutation CreateAdmin($username: String!, $password: String!) {
+    createAdmin(username: $username, password: $password) {
+      id
+      username
+      createdAt
+    }
+  }
+`
+
+export const DELETE_ADMIN = gql`
+  mutation DeleteAdmin($id: ID!) {
+    deleteAdmin(id: $id) {
+      success
+      message
+    }
+  }
+`
+
+export const GET_SESSION_VERSION = gql`
+  query GetSessionVersion {
+    sessionVersion
+  }
+`
+
+export const VALIDATE_TEAM_SESSION = gql`
+  query ValidateTeamSession($teamId: ID!, $sessionVersion: Int!) {
+    validateTeamSession(teamId: $teamId, sessionVersion: $sessionVersion) {
+      valid
+      team {
+        id
+        name
+        color
+      }
+      sessionVersion
+    }
+  }
+`
+
+export const INVALIDATE_ALL_SESSIONS = gql`
+  mutation InvalidateAllSessions {
+    invalidateAllSessions {
+      sessionVersion
+    }
+  }
+`

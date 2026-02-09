@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ApolloProvider, useQuery, useMutation } from '@apollo/client'
+import { ApolloProvider, useQuery, useMutation, useLazyQuery } from '@apollo/client'
 import { client } from '@/lib/apollo-client'
 import {
   GET_ROOMS,
-  ADMIN_SET_ROOM_STATUS
+  ADMIN_SET_ROOM_STATUS,
+  VALIDATE_SESSION
 } from '@/lib/graphql/queries'
 import RoomCard from '@/components/RoomCard'
-import LiveCounter from '@/components/LiveCounter'
 import AdminDashboard from '@/components/AdminDashboard'
 import HistoryTable from '@/components/HistoryTable'
 import AdminActions from '@/components/AdminActions'
@@ -16,24 +16,73 @@ import TeamsPanel from '@/components/TeamsPanel'
 import RoomManager from '@/components/RoomManager'
 import DataExport from '@/components/DataExport'
 import BackupManager from '@/components/BackupManager'
+import AdminLogin from '@/components/AdminLogin'
+import AdminManager from '@/components/AdminManager'
 import { sortRooms } from '@/lib/utils'
 
-type PanelType = 'backup' | 'export' | 'actions' | 'rooms' | 'teams' | null
+type PanelType = 'backup' | 'export' | 'actions' | 'rooms' | 'teams' | 'admins' | null
+
+interface AdminSession {
+  token: string
+  admin: {
+    id: string
+    username: string
+  }
+}
 
 function AdminContent() {
   const [rooms, setRooms] = useState<any[]>([])
   const [activePanel, setActivePanel] = useState<PanelType>(null)
+  const [session, setSession] = useState<AdminSession | null>(null)
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  const [validateSession] = useLazyQuery(VALIDATE_SESSION)
 
   const { data: roomsData, refetch } = useQuery(GET_ROOMS, {
-    pollInterval: 3000 // Poll every 3 seconds for updates
+    pollInterval: 3000,
+    skip: !session
   })
   const [setRoomStatus] = useMutation(ADMIN_SET_ROOM_STATUS)
+
+  // Check session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      const savedToken = localStorage.getItem('adminToken')
+      if (savedToken) {
+        try {
+          const { data } = await validateSession({ variables: { token: savedToken } })
+          if (data?.validateSession) {
+            setSession({
+              token: savedToken,
+              admin: data.validateSession
+            })
+          } else {
+            localStorage.removeItem('adminToken')
+          }
+        } catch {
+          localStorage.removeItem('adminToken')
+        }
+      }
+      setCheckingSession(false)
+    }
+    checkSession()
+  }, [validateSession])
 
   useEffect(() => {
     if (roomsData?.rooms) {
       setRooms(sortRooms(roomsData.rooms))
     }
   }, [roomsData])
+
+  const handleLogin = (token: string, admin: { id: string; username: string }) => {
+    localStorage.setItem('adminToken', token)
+    setSession({ token, admin })
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken')
+    setSession(null)
+  }
 
   const handleAdminAction = async (roomId: string, status: string, teamId?: string) => {
     await setRoomStatus({
@@ -42,29 +91,27 @@ function AdminContent() {
     refetch()
   }
 
-  const stats = rooms.reduce(
-    (acc, room) => {
-      if (room.status === 'OCCUPIED') acc.occupiedCount++
-      if (room.status === 'RESERVED') acc.reservedCount++
-      if (room.status === 'FREE') acc.freeCount++
-      if (room.status === 'OFFLINE') acc.offlineCount++
-      return acc
-    },
-    {
-      occupiedCount: 0,
-      reservedCount: 0,
-      freeCount: 0,
-      offlineCount: 0,
-      totalRooms: rooms.length
-    }
-  )
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="inline-block w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  // Show login if not authenticated
+  if (!session) {
+    return <AdminLogin onLogin={handleLogin} />
+  }
 
   const panelTitles: Record<Exclude<PanelType, null>, string> = {
     backup: 'Správa záloh',
     export: 'Export dat',
     actions: 'Admin akce',
     rooms: 'Správa místností',
-    teams: 'Skupiny'
+    teams: 'Skupiny',
+    admins: 'Správa adminů'
   }
 
   const toolbarButtons = [
@@ -113,6 +160,15 @@ function AdminContent() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
         </svg>
       )
+    },
+    {
+      id: 'admins' as const,
+      label: 'Admini',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      )
     }
   ]
 
@@ -122,17 +178,27 @@ function AdminContent() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-0 mb-8">
           <div>
-            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold mb-2 text-orange-400">
               Admin Panel
             </h1>
-            <p className="text-gray-400 text-lg">Správa TeleRooms</p>
+            <p className="text-gray-400 text-lg">
+              Přihlášen jako <span className="text-orange-400 font-medium">{session.admin.username}</span>
+            </p>
           </div>
-          <a
-            href="/"
-            className="w-full md:w-auto text-center px-6 py-3 bg-primary hover:bg-primary-dark rounded-lg text-sm font-semibold shadow-lg shadow-primary/30 transition-all text-white"
-          >
-            ← Uživatelská verze
-          </a>
+          <div className="flex gap-3 w-full md:w-auto">
+            <a
+              href="/dashboard"
+              className="flex-1 md:flex-none text-center px-6 py-3 bg-white/5 hover:bg-white/10 border border-orange-500/20 hover:border-orange-400/40 rounded-lg text-sm font-semibold transition-all text-gray-300 hover:text-white"
+            >
+              Dashboard
+            </a>
+            <button
+              onClick={handleLogout}
+              className="flex-1 md:flex-none text-center px-6 py-3 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 hover:border-red-400/40 rounded-lg text-sm font-semibold transition-all text-red-400 hover:text-red-300"
+            >
+              Odhlásit
+            </button>
+          </div>
         </div>
 
         {/* Featured Dashboard - Full Width at Top */}
@@ -148,8 +214,8 @@ function AdminContent() {
               onClick={() => setActivePanel(activePanel === button.id ? null : button.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 activePanel === button.id
-                  ? 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
-                  : 'bg-white/5 hover:bg-white/10 border border-teal-500/20 hover:border-teal-400/40 text-gray-300 hover:text-white'
+                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+                  : 'bg-white/5 hover:bg-white/10 border border-orange-500/20 hover:border-orange-400/40 text-gray-300 hover:text-white'
               }`}
             >
               {button.icon}
@@ -161,9 +227,9 @@ function AdminContent() {
         {/* Modal for active panel */}
         {activePanel && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-8 md:pt-12 px-4">
-            <div className="bg-gray-900 rounded-xl border border-teal-500/20 w-full max-w-4xl h-[90vh] flex flex-col">
-              <div className="flex-shrink-0 bg-gray-900 p-4 border-b border-teal-500/20 flex justify-between items-center rounded-t-xl">
-                <h3 className="text-xl font-bold text-teal-400">{panelTitles[activePanel]}</h3>
+            <div className="bg-gray-900 rounded-xl border border-orange-500/20 w-full max-w-4xl h-[90vh] flex flex-col">
+              <div className="flex-shrink-0 bg-gray-900 p-4 border-b border-orange-500/20 flex justify-between items-center rounded-t-xl">
+                <h3 className="text-xl font-bold text-orange-400">{panelTitles[activePanel]}</h3>
                 <button
                   onClick={() => setActivePanel(null)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
@@ -179,6 +245,7 @@ function AdminContent() {
                 {activePanel === 'actions' && <AdminActions />}
                 {activePanel === 'rooms' && <RoomManager />}
                 {activePanel === 'teams' && <TeamsPanel />}
+                {activePanel === 'admins' && <AdminManager currentAdminId={session.admin.id} />}
               </div>
             </div>
           </div>
@@ -186,30 +253,15 @@ function AdminContent() {
 
         {/* Main Content - Full Width */}
         <div className="space-y-6">
-          <LiveCounter
-            occupiedCount={stats.occupiedCount}
-            reservedCount={stats.reservedCount}
-            freeCount={stats.freeCount}
-            offlineCount={stats.offlineCount}
-            totalRooms={stats.totalRooms}
-          />
-
           {/* Rooms Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {rooms.map((room) => (
-              <div key={room.id} className="flex flex-col">
-                <RoomCard
-                  room={room}
-                  isAdmin={true}
-                  onAdminAction={handleAdminAction}
-                />
-                <a
-                  href={`/admin/room/${room.id}`}
-                  className="mt-2 block text-center px-3 py-2 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-lg text-xs font-medium text-primary transition-all"
-                >
-                  Sprava mistnosti →
-                </a>
-              </div>
+              <RoomCard
+                key={room.id}
+                room={room}
+                isAdmin={true}
+                onAdminAction={handleAdminAction}
+              />
             ))}
           </div>
 

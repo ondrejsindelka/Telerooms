@@ -12,7 +12,7 @@ interface TeamSetupProps {
 
 export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
   const [name, setName] = useState('')
-  const [color, setColor] = useState('#FF6432')
+  const [color, setColor] = useState('#f97316')
   const [createTeam, { loading: creating }] = useMutation(CREATE_TEAM)
   const { data: teamsData, loading: loadingTeams } = useQuery(GET_TEAMS, {
     pollInterval: 5000
@@ -44,36 +44,36 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="bg-white/5 backdrop-blur-md p-10 rounded-2xl shadow-2xl shadow-teal-500/10 max-w-4xl w-full border border-teal-500/20 flex flex-col md:flex-row gap-10">
-        
+      <div className="card-elevated p-8 sm:p-10 max-w-4xl w-full flex flex-col md:flex-row gap-8 md:gap-10 animate-fade-in">
+
         {/* Create Team Section */}
         <div className="flex-1">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-500 bg-clip-text text-transparent">
+            <h1 className="text-4xl font-bold mb-3 gradient-text">
               TeleRooms
             </h1>
-            <p className="text-gray-400 text-lg">
+            <p className="text-text-secondary text-lg">
               Vytvořte novou skupinu
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-semibold mb-3 text-gray-300">
+              <label className="block text-sm font-semibold mb-3 text-text-secondary">
                 Název skupiny
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border-2 border-teal-500/20 rounded-xl focus:outline-none focus:border-teal-400 transition-colors text-white backdrop-blur-sm"
-                placeholder="Např. Skupina A"
+                className="input"
+                placeholder="Napr. Skupina A"
                 maxLength={50}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold mb-3 text-gray-300">
+              <label className="block text-sm font-semibold mb-3 text-text-secondary">
                 Barva skupiny
               </label>
               <div className="flex gap-4 items-center">
@@ -81,13 +81,13 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-24 h-14 rounded-xl cursor-pointer border-2 border-teal-500/20 hover:border-teal-400 transition-colors"
+                  className="w-24 h-14 rounded-xl cursor-pointer border-2 border-orange-500/20 hover:border-orange-400/50 transition-colors bg-transparent"
                 />
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-white/5 border-2 border-teal-500/20 rounded-xl focus:outline-none focus:border-teal-400 font-mono uppercase transition-colors text-white backdrop-blur-sm"
+                  className="input flex-1 font-mono uppercase"
                   pattern="^#[0-9A-Fa-f]{6}$"
                 />
               </div>
@@ -96,55 +96,67 @@ export default function TeamSetup({ onTeamCreated }: TeamSetupProps) {
             <button
               type="submit"
               disabled={creating}
-              className="w-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-500 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-teal-500/30 hover:shadow-teal-500/50 text-lg"
+              className="btn-primary w-full py-4 text-lg"
             >
               {creating ? 'Vytváření...' : 'Vytvořit skupinu'}
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-teal-500/20">
-            <p className="text-xs text-gray-500 text-center leading-relaxed">
+          <div className="mt-8 pt-6 border-t border-orange-500/10">
+            <p className="text-xs text-text-muted text-center leading-relaxed">
               Název skupiny musí být unikátní<br />
               Barva slouží k identifikaci vašich místností
             </p>
           </div>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
+            <a
+              href="/dashboard"
+              className="block text-sm text-orange-400 hover:text-orange-300 transition-colors"
+            >
+              Přejít na Dashboard
+            </a>
             <a
               href="/admin"
-              className="text-sm text-teal-400 hover:text-teal-300 transition-colors"
+              className="block text-xs text-gray-500 hover:text-gray-400 transition-colors"
             >
-              Přejít do Admin panelu
+              Admin Panel
             </a>
           </div>
         </div>
 
         {/* Existing Teams Section */}
-        <div className="flex-1 border-t md:border-t-0 md:border-l border-teal-500/20 pt-8 md:pt-0 md:pl-10">
+        <div className="flex-1 border-t md:border-t-0 md:border-l border-orange-500/10 pt-8 md:pt-0 md:pl-10">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold mb-3 text-white">
               Existující skupiny
             </h2>
-            <p className="text-gray-400 text-sm">
+            <p className="text-text-secondary text-sm">
               Klikněte pro přihlášení ke skupině
             </p>
           </div>
 
-          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
             {loadingTeams ? (
-              <p className="text-center text-gray-500">Načítání skupin...</p>
+              <div className="py-8 text-center">
+                <div className="inline-block w-6 h-6 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+                <p className="text-text-muted mt-2">Načítání skupin...</p>
+              </div>
             ) : existingTeams.length === 0 ? (
-              <p className="text-center text-gray-500">Zatím žádné skupiny</p>
+              <p className="text-center text-text-muted py-8">Zatím žádné skupiny</p>
             ) : (
               existingTeams.map((team: any) => (
                 <button
                   key={team.id}
                   onClick={() => onTeamCreated(team)}
-                  className="w-full flex items-center justify-between p-4 bg-white/5 border border-teal-500/20 rounded-xl hover:border-teal-400/40 hover:bg-white/10 transition-all group backdrop-blur-sm"
+                  className="w-full flex items-center justify-between p-4 card-hover group"
                 >
                   <TeamBadge name={team.name} color={team.color} />
-                  <span className="text-gray-500 text-sm group-hover:text-teal-400 transition-colors">
-                    Přihlásit →
+                  <span className="text-text-muted text-sm group-hover:text-orange-400 transition-colors flex items-center gap-1">
+                    Přihlásit
+                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </span>
                 </button>
               ))
